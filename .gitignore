@@ -1,0 +1,12 @@
+.sqlkit/
+.direnv/
+.cache/
+artifacts/
+dist/
+bin/
+/sqlkit
+*.exe
+*.log
+.env
+*.env
+!.env.example
