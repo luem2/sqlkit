@@ -46,11 +46,7 @@ func newEnvCheckCommand(app *appContext) *cobra.Command {
 		Short: "Validate connection settings for an environment",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, err := app.cfg.LoadSQLConnectionWithOverrides(args[0], config.SQLConnectionOverrides{
-				Server:   app.sqlServer,
-				User:     app.sqlUser,
-				Password: app.sqlPassword,
-			})
+			conn, err := loadConnection(app, args[0])
 			if err != nil {
 				return err
 			}
