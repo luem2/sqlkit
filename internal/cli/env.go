@@ -33,7 +33,9 @@ func newEnvListCommand(app *appContext) *cobra.Command {
 						status = "configured"
 					}
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%-12s %s\n", envName, status)
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%-12s %s\n", envName, status); err != nil {
+					return err
+				}
 			}
 			return nil
 		},

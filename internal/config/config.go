@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -398,7 +399,7 @@ func writeEnvSection(builder *strings.Builder, envName string, envCfg EnvConfig)
 	for _, key := range sortedKeys(values) {
 		builder.WriteString(key)
 		builder.WriteString(" = ")
-		builder.WriteString(fmt.Sprintf("%q", values[key]))
+		builder.WriteString(strconv.Quote(values[key]))
 		builder.WriteString("\n")
 	}
 	if envCfg.TrustServerCertificate != nil {
@@ -420,7 +421,7 @@ func writeSection(builder *strings.Builder, name string, values map[string]strin
 		}
 		builder.WriteString(key)
 		builder.WriteString(" = ")
-		builder.WriteString(fmt.Sprintf("%q", values[key]))
+		builder.WriteString(strconv.Quote(values[key]))
 		builder.WriteString("\n")
 	}
 }

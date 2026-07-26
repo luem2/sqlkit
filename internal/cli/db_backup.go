@@ -143,29 +143,6 @@ func moveBackupToHost(cmd *cobra.Command, app *appContext, container string, bac
 	return hostPath, nil
 }
 
-func copyRestoreBackupToContainer(cmd *cobra.Command, app *appContext, container string, hostPath string, database string) (string, func() error, error) {
-	containerPath := restoreContainerTempPath(app, database, hostPath, time.Now())
-	destination := container + ":" + containerPath
-	proc := newProcessService(cmd, app)
-
-	result := proc.Run(app.cfg.ToolPath("docker"), "cp", hostPath, destination)
-	if result.ExitCode != 0 {
-		return "", nil, fmt.Errorf("docker cp failed with exit code %d\n%s", result.ExitCode, firstNonEmpty(result.Stderr, result.Stdout))
-	}
-	infof(cmd.OutOrStdout(), "Staged restore backup in container: %s", containerPath)
-
-	cleanup := func() error {
-		result := proc.Run(app.cfg.ToolPath("docker"), "exec", container, "rm", "-f", containerPath)
-		if result.ExitCode != 0 {
-			return fmt.Errorf("docker rm failed with exit code %d\n%s", result.ExitCode, firstNonEmpty(result.Stderr, result.Stdout))
-		}
-		infof(cmd.OutOrStdout(), "Removed staged restore backup from container: %s", containerPath)
-		return nil
-	}
-
-	return containerPath, cleanup, nil
-}
-
 func resolveRestoreHostBakPath(app *appContext, value string) (string, bool) {
 	value = strings.TrimSpace(value)
 	if value == "" {

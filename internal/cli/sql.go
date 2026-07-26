@@ -126,10 +126,14 @@ func runSQLScripts(cmd *cobra.Command, app *appContext, flags *sqlFlags, scripts
 			return err
 		}
 		if result.Stdout != "" {
-			fmt.Fprintln(cmd.OutOrStdout(), result.Stdout)
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), result.Stdout); err != nil {
+				return err
+			}
 		}
 		if result.Stderr != "" {
-			fmt.Fprintln(cmd.ErrOrStderr(), result.Stderr)
+			if _, err := fmt.Fprintln(cmd.ErrOrStderr(), result.Stderr); err != nil {
+				return err
+			}
 		}
 		if result.ExitCode != 0 {
 			return fmt.Errorf("script failed with exit code %d: %s", result.ExitCode, script)

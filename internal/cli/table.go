@@ -15,7 +15,7 @@ func printResultSets(writer io.Writer, resultSets []sqlserver.ResultSet) {
 			continue
 		}
 		if index > 0 {
-			fmt.Fprintln(writer)
+			_, _ = fmt.Fprintln(writer)
 		}
 		rows := make([][]string, 0, len(resultSet.Rows)+1)
 		rows = append(rows, resultSet.Columns)
@@ -59,19 +59,19 @@ func printTableRow(writer io.Writer, row []string, widths []int) {
 			value = row[index]
 		}
 		if index > 0 {
-			fmt.Fprint(writer, "  ")
+			_, _ = fmt.Fprint(writer, "  ")
 		}
-		fmt.Fprintf(writer, "%-*s", width, value)
+		_, _ = fmt.Fprintf(writer, "%-*s", width, value)
 	}
-	fmt.Fprintln(writer)
+	_, _ = fmt.Fprintln(writer)
 }
 
 func printTableSeparator(writer io.Writer, widths []int) {
 	for index, width := range widths {
 		if index > 0 {
-			fmt.Fprint(writer, "  ")
+			_, _ = fmt.Fprint(writer, "  ")
 		}
-		fmt.Fprint(writer, strings.Repeat("-", width))
+		_, _ = fmt.Fprint(writer, strings.Repeat("-", width))
 	}
-	fmt.Fprintln(writer)
+	_, _ = fmt.Fprintln(writer)
 }

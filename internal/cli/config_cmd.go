@@ -57,8 +57,8 @@ func newConfigSecretGetCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), secret)
-			return nil
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), secret)
+			return err
 		},
 	}
 }
@@ -177,8 +177,8 @@ func newConfigPathCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), path)
-			return nil
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), path)
+			return err
 		},
 	}
 }
@@ -316,9 +316,13 @@ func parseConfigBool(value string) (bool, error) {
 
 func promptDefault(cmd *cobra.Command, label string, current string) (string, error) {
 	if strings.TrimSpace(current) != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "%s [%s]: ", label, current)
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s [%s]: ", label, current); err != nil {
+			return "", err
+		}
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "%s: ", label)
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s: ", label); err != nil {
+			return "", err
+		}
 	}
 	reader := bufio.NewReader(cmd.InOrStdin())
 	value, err := reader.ReadString('\n')
@@ -336,10 +340,14 @@ func promptDefault(cmd *cobra.Command, label string, current string) (string, er
 }
 
 func promptPassword(cmd *cobra.Command, label string) (string, error) {
-	fmt.Fprintf(cmd.OutOrStdout(), "%s: ", label)
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s: ", label); err != nil {
+		return "", err
+	}
 	if file, ok := cmd.InOrStdin().(*os.File); ok && term.IsTerminal(int(file.Fd())) {
 		password, err := term.ReadPassword(int(file.Fd()))
-		fmt.Fprintln(cmd.OutOrStdout())
+		if _, printErr := fmt.Fprintln(cmd.OutOrStdout()); printErr != nil {
+			return "", printErr
+		}
 		if err != nil {
 			return "", err
 		}

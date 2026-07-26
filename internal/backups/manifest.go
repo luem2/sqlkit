@@ -56,7 +56,7 @@ func WriteManifest(manifest *Manifest) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(manifest.ManifestFile, data, 0640)
+	return os.WriteFile(manifest.ManifestFile, data, 0o640)
 }
 
 func ReadManifest(path string) (*Manifest, error) {
@@ -76,6 +76,7 @@ func ReadManifest(path string) (*Manifest, error) {
 
 func LoadManifests(root string) ([]Manifest, error) {
 	var manifests []Manifest
+
 	if _, err := os.Stat(root); err != nil {
 		if os.IsNotExist(err) {
 			return manifests, nil
@@ -110,7 +111,7 @@ func FileSHA256(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {

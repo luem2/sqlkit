@@ -51,7 +51,7 @@ func (c *Client) Query(ctx context.Context, statement Statement) ([]ResultSet, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var resultSets []ResultSet
 	for {

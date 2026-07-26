@@ -77,20 +77,20 @@ func newDepsInstallCommand(app *appContext) *cobra.Command {
 func printDependencyStatus(cmd *cobra.Command, app *appContext) {
 	for _, dep := range deps.DefaultDependencies(app.cfg) {
 		status := deps.Check(commandContext(cmd), dep)
-		fmt.Fprintln(cmd.OutOrStdout(), deps.FormatStatus(status))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), deps.FormatStatus(status))
 	}
 }
 
 func printInstallPlan(cmd *cobra.Command, plan deps.InstallPlan) {
-	fmt.Fprintf(cmd.OutOrStdout(), "Dependency: %s\n", plan.Name)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Dependency: %s\n", plan.Name)
 	for _, note := range plan.Notes {
-		fmt.Fprintf(cmd.OutOrStdout(), "- %s\n", note)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "- %s\n", note)
 	}
 	if len(plan.Commands) == 0 {
 		return
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), "Commands:")
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Commands:")
 	for _, command := range plan.Commands {
-		fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", strings.Join(command, " "))
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", strings.Join(command, " "))
 	}
 }

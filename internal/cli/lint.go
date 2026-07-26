@@ -102,7 +102,7 @@ func runUnusedVars(path string, recursive bool) ([]unusedVarsResult, error) {
 
 func printUnusedVarsResults(cmd *cobra.Command, results []unusedVarsResult) {
 	if len(results) == 1 {
-		fmt.Fprintln(cmd.OutOrStdout(), lint.FormatUnused(results[0].Path, results[0].Usages))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), lint.FormatUnused(results[0].Path, results[0].Usages))
 		return
 	}
 
@@ -112,13 +112,13 @@ func printUnusedVarsResults(cmd *cobra.Command, results []unusedVarsResult) {
 			continue
 		}
 		if printed {
-			fmt.Fprintln(cmd.OutOrStdout())
+			_, _ = fmt.Fprintln(cmd.OutOrStdout())
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), lint.FormatUnused(result.Path, result.Usages))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), lint.FormatUnused(result.Path, result.Usages))
 		printed = true
 	}
 	if !printed {
-		fmt.Fprintln(cmd.OutOrStdout(), "No possibly unused variables found.")
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No possibly unused variables found.")
 	}
 }
 

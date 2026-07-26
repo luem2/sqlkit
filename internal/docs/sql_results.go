@@ -25,7 +25,7 @@ func parseResultSetsWithMetadata(body string, metadata map[string]string) []SQLR
 		if fromStart < 0 {
 			statementEnd := findStatementEnd(clean, selectStart+len("SELECT"))
 			list := strings.TrimSpace(clean[selectStart+len("SELECT") : statementEnd])
-			if !(strings.Contains(list, "=") && regexp.MustCompile(`(?i)^\s*@`).MatchString(list)) {
+			if !strings.Contains(list, "=") || !regexp.MustCompile(`(?i)^\s*@`).MatchString(list) {
 				resultSets = append(resultSets, SQLResultSet{Columns: parseSelectList(list, nil, nil, metadata)})
 			}
 			pos = statementEnd

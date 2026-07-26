@@ -11,8 +11,12 @@ func newDoctorCommand(app *appContext) *cobra.Command {
 		Use:   "doctor",
 		Short: "Check external dependencies",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(cmd.OutOrStdout(), "sqlkit doctor")
-			fmt.Fprintln(cmd.OutOrStdout())
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), "sqlkit doctor"); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintln(cmd.OutOrStdout()); err != nil {
+				return err
+			}
 
 			printDependencyStatus(cmd, app)
 

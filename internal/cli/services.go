@@ -54,7 +54,7 @@ func (s *dbService) execIn(database string, statement sqlserver.Statement) error
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	return s.exec(client, statement)
 }
 
@@ -63,7 +63,7 @@ func (s *dbService) queryIn(database string, statement sqlserver.Statement) ([]s
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	return s.query(client, statement)
 }
 

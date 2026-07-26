@@ -20,7 +20,6 @@ type dbFlags struct {
 	dacpac              string
 	output              string
 	serverOutput        string
-	bak                 string
 	bakDir              string
 	container           string
 	moveToHost          bool

@@ -8,7 +8,9 @@ import (
 )
 
 func Exact(reader io.Reader, writer io.Writer, expected string) error {
-	fmt.Fprintf(writer, "Type %s to confirm: ", expected)
+	if _, err := fmt.Fprintf(writer, "Type %s to confirm: ", expected); err != nil {
+		return err
+	}
 
 	scanner := bufio.NewScanner(reader)
 	if !scanner.Scan() {
@@ -26,7 +28,9 @@ func Exact(reader io.Reader, writer io.Writer, expected string) error {
 }
 
 func ExactFold(reader io.Reader, writer io.Writer, expected string) error {
-	fmt.Fprintf(writer, "Type %s to confirm: ", expected)
+	if _, err := fmt.Fprintf(writer, "Type %s to confirm: ", expected); err != nil {
+		return err
+	}
 
 	scanner := bufio.NewScanner(reader)
 	if !scanner.Scan() {

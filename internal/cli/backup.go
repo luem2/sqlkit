@@ -108,7 +108,7 @@ func newBackupRunCommand(app *appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer func() { _ = client.Close() }()
 
 			databases, err := selectedDatabases(policy, flags.database)
 			if err != nil {
@@ -155,7 +155,7 @@ func newBackupVerifyCommand(app *appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer func() { _ = client.Close() }()
 
 			manifests, err := backups.LoadManifests(policy.LocalRoot)
 			if err != nil {
@@ -263,15 +263,21 @@ func newBackupStatusCommand(app *appContext) *cobra.Command {
 			}
 			latest := backups.LatestByDatabaseAndType(manifests)
 			writer := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(writer, "DATABASE\tTYPE\tFINISHED_AT\tFILE\tS3")
+			if _, err := fmt.Fprintln(writer, "DATABASE\tTYPE\tFINISHED_AT\tFILE\tS3"); err != nil {
+				return err
+			}
 			for _, database := range policy.Databases {
 				for _, backupType := range []string{backups.TypeFull, backups.TypeDiff, backups.TypeLog} {
 					manifest, ok := latest[database][backupType]
 					if !ok {
-						fmt.Fprintf(writer, "%s\t%s\tmissing\t\t\n", database, backupType)
+						if _, err := fmt.Fprintf(writer, "%s\t%s\tmissing\t\t\n", database, backupType); err != nil {
+							return err
+						}
 						continue
 					}
-					fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%t\n", database, backupType, manifest.FinishedAt.Format(time.RFC3339), manifest.File, manifest.S3Uploaded)
+					if _, err := fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%t\n", database, backupType, manifest.FinishedAt.Format(time.RFC3339), manifest.File, manifest.S3Uploaded); err != nil {
+						return err
+					}
 				}
 			}
 			return writer.Flush()
@@ -306,7 +312,7 @@ func newBackupRestoreDrillCommand(app *appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer func() { _ = client.Close() }()
 
 			manifests, err := backups.LoadManifests(policy.LocalRoot)
 			if err != nil {
@@ -655,7 +661,7 @@ func copyFile(source string, target string) error {
 	if err != nil {
 		return err
 	}
-	defer input.Close()
+	defer func() { _ = input.Close() }()
 	if err := backups.EnsureParent(target); err != nil {
 		return err
 	}
