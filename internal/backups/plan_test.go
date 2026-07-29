@@ -74,6 +74,26 @@ func TestPruneCandidatesUsesTypeRetention(t *testing.T) {
 	}
 }
 
+func TestPruneCandidatesFiltersByPolicyEnvironment(t *testing.T) {
+	now := time.Date(2026, 6, 17, 0, 0, 0, 0, time.UTC)
+	policy := &Policy{
+		Environment: "prod",
+		Retention:   Retention{FullDays: 30, DiffDays: 15, LogDays: 15},
+	}
+	prod := okManifest("P_BD_SISTEMA", TypeFull, "prod-full.bak", now.AddDate(0, 0, -31))
+	prod.Environment = "prod"
+	legacy := okManifest("P_BD_SISTEMA", TypeFull, "legacy-full.bak", now.AddDate(0, 0, -31))
+	legacy.Environment = "prod-legacy"
+
+	candidates := PruneCandidates(policy, []Manifest{prod, legacy}, now, false)
+	if len(candidates) != 1 {
+		t.Fatalf("len(candidates) = %d, want 1", len(candidates))
+	}
+	if candidates[0].Path != "prod-full.bak" {
+		t.Fatalf("candidate path = %q, want prod-full.bak", candidates[0].Path)
+	}
+}
+
 func TestDeleteLocalCandidateRemovesEmptyParentsWithinRoot(t *testing.T) {
 	root := t.TempDir()
 	backupFile := filepath.Join(root, "prod", "P_BD_SISTEMA", "log", "2026", "07", "01", "file.trn")

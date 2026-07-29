@@ -158,6 +158,9 @@ func parseLSN(value string) (*big.Int, bool) {
 func PruneCandidates(policy *Policy, manifests []Manifest, now time.Time, includeS3 bool) []PruneCandidate {
 	var candidates []PruneCandidate
 	for _, manifest := range manifests {
+		if strings.TrimSpace(policy.Environment) != "" && manifest.Environment != policy.Environment {
+			continue
+		}
 		if manifest.Status != "ok" {
 			continue
 		}
