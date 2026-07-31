@@ -20,6 +20,8 @@ type appContext struct {
 	sqlPassword       string
 	sqlPasswordFile   string
 	sqlPasswordSecret string
+	secretsFile       string
+	secretsSpec       string
 	nonInteractive    bool
 	connectTimeout    time.Duration
 	sqlTimeout        time.Duration
@@ -60,7 +62,9 @@ func NewRootCommand() *cobra.Command {
 	root.PersistentFlags().StringVar(&app.sqlUser, "user", "", "SQL user override")
 	root.PersistentFlags().StringVar(&app.sqlPassword, "password", "", "SQL password override")
 	root.PersistentFlags().StringVar(&app.sqlPasswordFile, "password-file", "", "read SQL password override from a file")
-	root.PersistentFlags().StringVar(&app.sqlPasswordSecret, "password-secret", "", "read SQL password override from a named keyring secret")
+	root.PersistentFlags().StringVar(&app.sqlPasswordSecret, "password-secret", "", "read SQL password override from a named secret")
+	root.PersistentFlags().StringVar(&app.secretsFile, "secrets-file", "", "dotenv-style secrets file; defaults to SQLKIT_SECRETS_FILE or paths.secrets_file")
+	root.PersistentFlags().StringVar(&app.secretsSpec, "secretspec", "", "secretspec.toml path; defaults to SQLKIT_SECRETSPEC or paths.secretspec")
 	root.PersistentFlags().BoolVar(&app.nonInteractive, "non-interactive", false, "fail instead of prompting for input")
 	root.PersistentFlags().DurationVar(&app.connectTimeout, "connect-timeout", defaultConnectTimeout, "SQL connection timeout; use 0 to disable")
 	root.PersistentFlags().DurationVar(&app.sqlTimeout, "sql-timeout", defaultSQLTimeout, "SQL statement timeout; use 0 to disable")
@@ -81,6 +85,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newPublishCommand(app))
 	root.AddCommand(newBootstrapCommand(app))
 	root.AddCommand(newMigrateCommand(app))
+	root.AddCommand(newSecretsCommand(app))
 	root.AddCommand(newTUICommand(app))
 
 	return root
@@ -109,18 +114,20 @@ func loadConnection(app *appContext, envName string) (*config.SQLConnection, err
 		}
 	}
 	if strings.TrimSpace(password) == "" && strings.TrimSpace(app.sqlPasswordSecret) != "" {
-		name := strings.TrimSpace(app.sqlPasswordSecret)
-		key, ok := app.cfg.Secrets[name]
-		if !ok || strings.TrimSpace(key) == "" {
-			return nil, fmt.Errorf("keyring secret %q is not configured; run sqlkit config secret set %s", name, name)
-		}
-		value, err := config.Secret(key)
+		value, err := resolveAppSecretValue(app, app.sqlPasswordSecret)
 		if err != nil {
-			return nil, fmt.Errorf("load keyring secret %q: %w", name, err)
+			return nil, err
 		}
 		password = value
 	}
 	password = firstNonEmpty(password, os.Getenv("SQLPASSWORD"))
+	if strings.TrimSpace(password) == "" {
+		if value, _, err := resolveAppSecretValueOptional(app, sqlPasswordSecretName(envName)); err != nil {
+			return nil, err
+		} else if strings.TrimSpace(value) != "" {
+			password = value
+		}
+	}
 	return app.cfg.LoadSQLConnectionWithOverrides(envName, config.SQLConnectionOverrides{
 		Server:   app.sqlServer,
 		User:     app.sqlUser,

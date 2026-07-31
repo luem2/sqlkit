@@ -157,6 +157,8 @@ func DefaultUserConfig() *Config {
 	cfg.Paths["artifacts"] = "artifacts"
 	cfg.Paths["docs"] = "docs"
 	cfg.Paths["logs"] = "logs"
+	cfg.Paths["secretspec"] = "secretspec.toml"
+	cfg.Paths["secrets_file"] = ".local/sqlkit/secrets.env"
 	cfg.Paths["backups"] = "data/backups"
 	cfg.Paths["sqlserver_backup_dir"] = "backups"
 	cfg.Paths["sqlserver_container"] = "mssql-db"

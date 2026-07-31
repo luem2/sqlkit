@@ -25,7 +25,9 @@ Arquitectura CLI modular, orientada a comandos:
   - `processService`: ejecucion de procesos externos, timeout y redaccion.
 - `internal/sqlserver`: driver `database/sql`, SQL interno parametrizado y runner de `sqlcmd`.
 - `internal/ssdt`: argumentos para `sqlpackage`.
-- `internal/config`: config de usuario, entornos y keyring.
+- `internal/config`: config de usuario y entornos.
+- `internal/secrets`: `secretspec.toml`, archivos dotenv y resolucion de
+  secretos.
 - `internal/docs`, `lint`, `sqlscripts`, `deps`: funcionalidades aisladas.
 
 La CLI es la capa de orquestacion. Las reglas reutilizables viven fuera de Cobra.
@@ -73,6 +75,8 @@ bacpacs = "data/bacpacs"
 sqlserver_backup_dir = "backups"
 sqlserver_container = "mssql-db"
 sqlserver_data = "/var/opt/mssql/data"
+secretspec = "secretspec.toml"
+secrets_file = ".local/sqlkit/secrets.env"
 
 [tools.sqlpackage]
 path = "/opt/sqlpackage/sqlpackage"
@@ -83,19 +87,20 @@ path = "/opt/mssql-tools/bin/sqlcmd"
 [env.local]
 server = "localhost"
 user = "sa"
-password_key = "env/local/password"
 encrypt = "disable"
 trust_server_certificate = true
 
 [env.infra]
 server = "sql.example.com"
 user = "infra_user"
-password_key = "env/infra/password"
 encrypt = "true"
 trust_server_certificate = true
 ```
 
-Los passwords se guardan en el keyring del sistema, no en TOML ni en el repo.
+Los passwords no se guardan en TOML ni en el repo. El camino recomendado es
+declararlos en `secretspec.toml` y proveer valores por variables de entorno o
+por un archivo local ignorado (`.local/sqlkit/secrets.env`). El keyring queda
+como compatibilidad para instalaciones existentes.
 
 ## Conexion SQL
 
@@ -103,10 +108,13 @@ Precedencia:
 
 1. Flags globales: `--server`, `--user`, `--password`.
 2. Archivo de password: `--password-file` o `SQLPASSWORD_FILE`.
-3. Secreto genérico del keyring: `--password-secret`.
+3. Secreto lógico: `--password-secret`, resuelto desde env/secrets-file/keyring
+   legacy.
 4. Variables de ambiente: `SQLSERVER`, `SQLUSER`, `SQLPASSWORD`.
-5. Config de usuario: `[env.<name>]`.
-6. Keyring del password configurado para el entorno.
+5. Password del entorno declarado en `secretspec.toml`, por ejemplo
+   `env/local/password -> SQLKIT_ENV_LOCAL_PASSWORD`.
+6. Config de usuario: `[env.<name>]`.
+7. Keyring del password configurado para el entorno, solo compatibilidad.
 
 Ejemplo:
 
@@ -186,33 +194,33 @@ sqlkit config init
 sqlkit config init --force
 sqlkit config set-repo /ruta/al/repo/sql
 
-sqlkit config secret set sqlkit-backup-password
-sqlkit config secret set sqlkit-backup-password --password "<valor>"
-sqlkit config secret get sqlkit-backup-password
-
 sqlkit config env set local \
   --server localhost \
   --user sa \
-  --password "<password>" \
   --encrypt disable \
   --trust-server-certificate true
 
 sqlkit config env set infra \
   --server "<SQLSERVER_INFRA>" \
   --user infra_user \
-  --password "<password>" \
   --encrypt true \
   --trust-server-certificate true
 
 sqlkit env list
 sqlkit env check local
 sqlkit env check infra
+
+sqlkit secrets list
+sqlkit secrets check --profile local
+sqlkit secrets template --profile local -o .local/sqlkit/secrets.env
 ```
 
-- `config secret set`: guarda secretos genéricos en keyring.
-- `config secret get`: imprime un secreto genérico desde keyring; usar sólo en
-  automatizaciones controladas porque escribe el valor en stdout.
-- `config env set`: guarda servidor/usuario/TLS y password del entorno.
+- `config secret set/get`: compatibilidad legacy con keyring.
+- `config env set`: guarda servidor/usuario/TLS del entorno.
+- `secrets list`: lista el contrato declarado en `secretspec.toml`.
+- `secrets check`: valida que los secretos requeridos para un perfil esten
+  disponibles desde env/secrets-file/keyring legacy.
+- `secrets template`: genera un `.env` local para completar fuera del repo.
 - `env list`: muestra entornos conocidos (`local`, `prod`, `prod-legacy`,
   `infra`).
 - `env check <env>`: valida conexión.
@@ -567,17 +575,15 @@ organizada por categorias:
   consultar FKs, nulls y limpiar caracteres.
 - `Backups y cargas`: backup manual, load de `.bak/.bacpac/.dacpac`, export
   bacpac y comandos de policy.
-- `Credenciales`: resumen seguro de config/keyring, `config init`,
-  `config set-repo`, alta/actualizacion de entornos, alta/consulta explicita de
-  secretos y `env check`.
+- `Setup local`: resumen seguro de config/secrets, `config init`,
+  `config set-repo`, alta/actualizacion de entornos, configuracion de
+  `secrets-file`, `secrets list/check/template` y `env check`.
 - `Diagnostico`: `doctor`, `deps check`, entornos y config path.
 
 La TUI muestra el comando equivalente antes de ejecutarlo. Si el entorno es
 `prod` o `prod-legacy`, pide confirmacion y agrega `--allow-prod`.
-Las acciones que escriben passwords usan input enmascarado y guardan el valor
-directamente en el keyring, sin pasarlo por flags ni imprimirlo. El resumen de
-credenciales muestra `server`, `user`, `password_key` y si la clave existe en
-keyring; no muestra valores secretos.
+El resumen de setup muestra `server`, `user`, paths locales y disponibilidad de
+secretos sin imprimir valores.
 
 Si la TUI se abre desde el repo de `sqlkit` y no desde el repo SQL, valida que
 el repo activo contenga `BD_SISTEMA/BD_SISTEMA.sqlproj`. Si no lo encuentra,
@@ -627,16 +633,16 @@ Variables SQLCMD:
 sqlkit sql run script.sql --env local --var Company=A --var DryRun=1
 ```
 
-Secretos desde keyring:
+Secretos desde `secretspec`/env/secrets-file:
 
 ```bash
-sqlkit config secret set sqlkit-backup-password
 sqlkit sql run _infra/logins/sqlkit-backup.sql --env prod --database master --allow-prod \
   --secret-var BackupPassword=sqlkit-backup-password
 ```
 
-`--secret-var SQLCMD_NAME=KEYRING_NAME` carga el valor desde keyring, escapa
-comillas para literales T-SQL y lo entrega solo al entorno de `sqlcmd`.
+`--secret-var SQLCMD_NAME=SECRET_NAME` carga el valor desde env/secrets-file o
+keyring legacy, escapa comillas para literales T-SQL y lo entrega solo al
+entorno de `sqlcmd`.
 No usar `--var` para passwords.
 
 Flags:
@@ -644,7 +650,7 @@ Flags:
 - `--database`: catálogo inicial; por defecto `master`.
 - `--log-dir`: carpeta de logs por script.
 - `--var`: variable SQLCMD no sensible, repetible.
-- `--secret-var`: variable SQLCMD desde keyring, repetible.
+- `--secret-var`: variable SQLCMD desde secreto logico, repetible.
 - `--allow-prod`: requerido contra producción.
 
 ### Documentación

@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/luem2/sqlkit/internal/config"
 	"github.com/luem2/sqlkit/internal/confirm"
 	"github.com/luem2/sqlkit/internal/ssdt"
 )
@@ -242,12 +241,8 @@ func validatePostPublishSecurity(app *appContext, flags *publishFlags, req publi
 		return nil
 	}
 	for _, secretName := range publishSecuritySecretNames() {
-		key, ok := app.cfg.Secrets[secretName]
-		if !ok || strings.TrimSpace(key) == "" {
-			return fmt.Errorf("keyring secret %q is not configured; run sqlkit config secret set %s", secretName, secretName)
-		}
-		if _, err := config.Secret(key); err != nil {
-			return fmt.Errorf("load keyring secret %q: %w", secretName, err)
+		if _, err := resolveAppSecretValue(app, secretName); err != nil {
+			return err
 		}
 	}
 	for _, script := range []string{

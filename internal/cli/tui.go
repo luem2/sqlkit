@@ -20,7 +20,7 @@ const (
 	tuiMenuDB          = "Bases"
 	tuiMenuScripts     = "Scripts y datos"
 	tuiMenuBackup      = "Backups y cargas"
-	tuiMenuCredentials = "Credenciales"
+	tuiMenuSetup       = "Setup local"
 	tuiMenuDiagnostics = "Diagnostico"
 	tuiMenuExit        = "Salir"
 
@@ -60,7 +60,7 @@ func runTUI(cmd *cobra.Command, app *appContext) error {
 			tuiMenuDB,
 			tuiMenuScripts,
 			tuiMenuBackup,
-			tuiMenuCredentials,
+			tuiMenuSetup,
 			tuiMenuDiagnostics,
 			tuiMenuExit,
 		}, tuiMenuBDSistema)
@@ -85,8 +85,8 @@ func runTUI(cmd *cobra.Command, app *appContext) error {
 			if err := tuiBackupMenu(cmd, app); err != nil {
 				return err
 			}
-		case tuiMenuCredentials:
-			if err := tuiCredentialsMenu(cmd, app); err != nil {
+		case tuiMenuSetup:
+			if err := tuiSetupMenu(cmd, app); err != nil {
 				return err
 			}
 		case tuiMenuDiagnostics:
@@ -345,15 +345,17 @@ func tuiBackupMenu(cmd *cobra.Command, app *appContext) error {
 	}
 }
 
-func tuiCredentialsMenu(cmd *cobra.Command, app *appContext) error {
-	tuiSection("Credenciales")
-	action, err := tuiSelect("Credenciales", []string{
+func tuiSetupMenu(cmd *cobra.Command, app *appContext) error {
+	tuiSection("Setup local")
+	action, err := tuiSelect("Setup local", []string{
 		"config resumen seguro",
 		"config init",
 		"config set-repo",
 		"config env set",
-		"config secret set",
-		"config secret get",
+		"config secrets-file",
+		"secrets list",
+		"secrets check",
+		"secrets template",
 		"env check",
 		tuiActionBack,
 	}, "config resumen seguro")
@@ -369,10 +371,14 @@ func tuiCredentialsMenu(cmd *cobra.Command, app *appContext) error {
 		return tuiConfigSetRepo(cmd, app)
 	case "config env set":
 		return tuiConfigEnvSet(cmd, app)
-	case "config secret set":
-		return tuiConfigSecretSet(cmd, app)
-	case "config secret get":
-		return tuiConfigSecretGet(cmd, app)
+	case "config secrets-file":
+		return tuiConfigSecretsFile(cmd, app)
+	case "secrets list":
+		return tuiSecretsList(cmd, app)
+	case "secrets check":
+		return tuiSecretsCheck(cmd, app)
+	case "secrets template":
+		return tuiSecretsTemplate(cmd, app)
 	case "env check":
 		return tuiEnvCheck(cmd, app)
 	case tuiActionBack:
@@ -425,6 +431,15 @@ func tuiConfigSummary(cmd *cobra.Command, app *appContext) error {
 	if repo := strings.TrimSpace(app.cfg.Defaults["repo"]); repo != "" {
 		lines = append(lines, "Repo por defecto: "+repo)
 	}
+	if spec, specPath, err := loadAppSecretSpec(app); err == nil {
+		lines = append(lines, "Secretspec: "+specPath)
+		_ = spec
+	} else {
+		lines = append(lines, "Secretspec: no disponible")
+	}
+	if _, filePath, err := loadAppSecretsFile(app); err == nil {
+		lines = append(lines, "Secrets file: "+filePath)
+	}
 	lines = append(lines, "")
 	lines = append(lines, "Entornos SQL")
 	envNames := append([]string{}, config.ValidEnvNames...)
@@ -444,10 +459,7 @@ func tuiConfigSummary(cmd *cobra.Command, app *appContext) error {
 		if envCfg.TrustServerCertificate != nil {
 			trustServerCertificate = strconv.FormatBool(*envCfg.TrustServerCertificate)
 		}
-		password := "sin password_key"
-		if strings.TrimSpace(envCfg.PasswordKey) != "" {
-			password = "keyring:" + envCfg.PasswordKey + " (" + tuiKeyringStatus(envCfg.PasswordKey) + ")"
-		}
+		password := tuiSecretAvailability(app, sqlPasswordSecretName(envName))
 		lines = append(lines, fmt.Sprintf("- %s: server=%s user=%s encrypt=%s trust_server_certificate=%s password=%s",
 			envName,
 			tuiConfigValue(envCfg.Server),
@@ -456,18 +468,6 @@ func tuiConfigSummary(cmd *cobra.Command, app *appContext) error {
 			trustServerCertificate,
 			password,
 		))
-	}
-
-	lines = append(lines, "")
-	lines = append(lines, "Secretos genericos")
-	secretNames := sortedKeys(app.cfg.Secrets)
-	if len(secretNames) == 0 {
-		lines = append(lines, "- sin configurar")
-	} else {
-		for _, name := range secretNames {
-			key := app.cfg.Secrets[name]
-			lines = append(lines, fmt.Sprintf("- %s: keyring:%s (%s)", name, key, tuiKeyringStatus(key)))
-		}
 	}
 
 	pterm.DefaultBox.
@@ -586,31 +586,10 @@ func tuiConfigEnvSet(cmd *cobra.Command, app *appContext) error {
 		return err
 	}
 
-	passwordKey := strings.TrimSpace(envCfg.PasswordKey)
-	updatePassword, err := tuiConfirm("Actualizar password en keyring", passwordKey == "")
-	if err != nil {
-		return err
-	}
-	if updatePassword {
-		password, err := tuiPasswordInput("SQL Password")
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(password) == "" {
-			return fmt.Errorf("SQL Password is required")
-		}
-		passwordKey = config.KeyringKey(envName)
-		if err := config.SetSecret(passwordKey, password); err != nil {
-			return fmt.Errorf("store password in keyring: %w", err)
-		}
-	} else if passwordKey == "" {
-		return fmt.Errorf("password_key is required when password is not updated")
-	}
-
 	app.cfg.Envs[envName] = config.EnvConfig{
 		Server:                 strings.TrimSpace(server),
 		User:                   strings.TrimSpace(user),
-		PasswordKey:            passwordKey,
+		PasswordKey:            envCfg.PasswordKey,
 		Encrypt:                encrypt,
 		TrustServerCertificate: &trustServerCertificate,
 	}
@@ -620,8 +599,65 @@ func tuiConfigEnvSet(cmd *cobra.Command, app *appContext) error {
 	}
 	successf(cmd.OutOrStdout(), "Entorno configurado: %s", envName)
 	infof(cmd.OutOrStdout(), "Config: %s", path)
-	infof(cmd.OutOrStdout(), "Password: keyring:%s", passwordKey)
+	infof(cmd.OutOrStdout(), "Password esperada: %s", strings.Join(secretEnvCandidates(app, sqlPasswordSecretName(envName)), " o "))
 	return nil
+}
+
+func tuiConfigSecretsFile(cmd *cobra.Command, app *appContext) error {
+	defaultPath := firstNonEmpty(app.cfg.Paths["secrets_file"], ".local/sqlkit/secrets.env")
+	pathValue, err := tuiInput("Secrets file", defaultPath)
+	if err != nil {
+		return err
+	}
+	pathValue = strings.TrimSpace(pathValue)
+	if pathValue == "" {
+		return fmt.Errorf("secrets file is required")
+	}
+	app.cfg.Paths["secrets_file"] = pathValue
+	app.secretsFile = pathValue
+	path, err := config.WriteUserConfig(app.cfg)
+	if err != nil {
+		return err
+	}
+	successf(cmd.OutOrStdout(), "Secrets file configurado: %s", resolveRepoPath(app, pathValue))
+	infof(cmd.OutOrStdout(), "Config: %s", path)
+	return nil
+}
+
+func tuiSecretsList(cmd *cobra.Command, app *appContext) error {
+	profile, err := tuiOptionalInput("Profile opcional", "")
+	if err != nil {
+		return err
+	}
+	args := []string{"secrets", "list"}
+	if profile != "" {
+		args = append(args, "--profile", profile)
+	}
+	return tuiConfirmAndRun(cmd, app, [][]string{args})
+}
+
+func tuiSecretsCheck(cmd *cobra.Command, app *appContext) error {
+	profile, err := tuiSelect("Profile", []string{"local", "prod", "prod-legacy", "infra", "linked-servers"}, "local")
+	if err != nil {
+		return err
+	}
+	return tuiConfirmAndRun(cmd, app, [][]string{{"secrets", "check", "--profile", profile}})
+}
+
+func tuiSecretsTemplate(cmd *cobra.Command, app *appContext) error {
+	profile, err := tuiSelect("Profile", []string{"local", "prod", "prod-legacy", "infra", "linked-servers", "todos"}, "local")
+	if err != nil {
+		return err
+	}
+	output, err := tuiInput("Output", ".local/sqlkit/secrets.env.example")
+	if err != nil {
+		return err
+	}
+	args := []string{"secrets", "template", "--output", output}
+	if profile != "todos" {
+		args = append(args, "--profile", profile)
+	}
+	return tuiConfirmAndRun(cmd, app, [][]string{args})
 }
 
 func tuiConfigSecretSet(cmd *cobra.Command, app *appContext) error {
@@ -1641,6 +1677,17 @@ func tuiKeyringStatus(key string) string {
 		return "faltante"
 	}
 	return "ok"
+}
+
+func tuiSecretAvailability(app *appContext, secretName string) string {
+	source, err := resolveAppSecretSource(app, secretName)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	if strings.TrimSpace(source.Value) == "" {
+		return "faltante (" + strings.Join(secretEnvCandidates(app, secretName), " o ") + ")"
+	}
+	return "ok (" + source.Label + ")"
 }
 
 func sortedKeys(values map[string]string) []string {

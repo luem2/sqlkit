@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/luem2/sqlkit/internal/config"
 	"github.com/luem2/sqlkit/internal/sqlscripts"
 )
 
@@ -79,7 +78,7 @@ func addSQLFlags(cmd *cobra.Command, flags *sqlFlags) {
 	cmd.Flags().StringVar(&flags.logDir, "log-dir", "", "directory for per-script logs; defaults to paths.logs/sql")
 	cmd.Flags().BoolVar(&flags.allowProd, "allow-prod", false, "allow execution against prod or prod-legacy")
 	cmd.Flags().StringArrayVar(&flags.variables, "var", nil, "SQLCMD variable NAME=VALUE; repeatable and not for secrets")
-	cmd.Flags().StringArrayVar(&flags.secretVars, "secret-var", nil, "SQLCMD variable NAME=KEYRING_SECRET_NAME; repeatable")
+	cmd.Flags().StringArrayVar(&flags.secretVars, "secret-var", nil, "SQLCMD variable NAME=SECRET_NAME; repeatable")
 	_ = cmd.MarkFlagRequired("env")
 }
 
@@ -103,13 +102,9 @@ func runSQLScripts(cmd *cobra.Command, app *appContext, flags *sqlFlags, scripts
 	secretVariables := make(map[string]string, len(secretRefs))
 	secretRedactions := make([]string, 0, len(secretRefs)*2)
 	for variable, secretName := range secretRefs {
-		key, ok := app.cfg.Secrets[secretName]
-		if !ok || strings.TrimSpace(key) == "" {
-			return fmt.Errorf("keyring secret %q is not configured; run sqlkit config secret set %s", secretName, secretName)
-		}
-		value, err := config.Secret(key)
+		value, err := resolveAppSecretValue(app, secretName)
 		if err != nil {
-			return fmt.Errorf("load keyring secret %q: %w", secretName, err)
+			return err
 		}
 		escaped := escapeSQLStringLiteral(value)
 		secretVariables[variable] = escaped
