@@ -115,6 +115,28 @@ func formatSQLValue(value interface{}) string {
 }
 
 func connectionString(conn *config.SQLConnection, database string) string {
+	dsn := connectionURL(conn)
+
+	query := dsn.Query()
+	query.Set("database", database)
+	setTLSQuery(conn, query)
+	dsn.RawQuery = query.Encode()
+
+	return dsn.String()
+}
+
+func DadbodURL(conn *config.SQLConnection, database string) string {
+	dsn := connectionURL(conn)
+
+	query := dsn.Query()
+	query.Set("database", database)
+	setTLSQuery(conn, query)
+	dsn.RawQuery = query.Encode()
+
+	return dsn.String()
+}
+
+func connectionURL(conn *config.SQLConnection) url.URL {
 	dsn := url.URL{
 		Scheme: "sqlserver",
 		User:   url.UserPassword(conn.User, conn.Password),
@@ -126,8 +148,10 @@ func connectionString(conn *config.SQLConnection, database string) string {
 		dsn.Path = "/" + instance
 	}
 
-	query := dsn.Query()
-	query.Set("database", database)
+	return dsn
+}
+
+func setTLSQuery(conn *config.SQLConnection, query url.Values) {
 	encrypt := conn.Encrypt
 	trustServerCertificate := conn.TrustServerCertificate
 	if strings.TrimSpace(encrypt) == "" {
@@ -136,9 +160,6 @@ func connectionString(conn *config.SQLConnection, database string) string {
 	}
 	query.Set("encrypt", encrypt)
 	query.Set("TrustServerCertificate", strconv.FormatBool(trustServerCertificate))
-	dsn.RawQuery = query.Encode()
-
-	return dsn.String()
 }
 
 func sqlServerURLHost(server string) string {
