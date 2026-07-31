@@ -19,7 +19,7 @@ type DatabaseHealth struct {
 
 type TypeHealth struct {
 	Status     string    `json:"status"`
-	FinishedAt time.Time `json:"finished_at,omitempty"`
+	FinishedAt time.Time `json:"finished_at"`
 	AgeSeconds int64     `json:"age_seconds,omitempty"`
 	S3Uploaded bool      `json:"s3_uploaded"`
 }
