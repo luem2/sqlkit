@@ -3,6 +3,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"io"
 	"path/filepath"
 	"sort"
 
@@ -48,7 +49,7 @@ func (r Runner) RunFile(ctx context.Context, database string, path string) proce
 		"-b",
 		"-i", path,
 	}
-	return r.runWithEnvironment(ctx, nil, nil, filepath.Dir(path), args...)
+	return r.runWithEnvironment(ctx, nil, nil, filepath.Dir(path), nil, nil, args...)
 }
 
 func (r Runner) RunFileWithVariables(ctx context.Context, database string, path string, variables map[string]string) process.Result {
@@ -56,6 +57,14 @@ func (r Runner) RunFileWithVariables(ctx context.Context, database string, path 
 }
 
 func (r Runner) RunFileWithVariablesAndEnvironment(ctx context.Context, database string, path string, variables map[string]string, environment map[string]string, redactions []string) process.Result {
+	return r.runFileWithVariablesAndEnvironment(ctx, database, path, variables, environment, redactions, nil, nil)
+}
+
+func (r Runner) RunFileWithVariablesAndEnvironmentStreaming(ctx context.Context, database string, path string, variables map[string]string, environment map[string]string, redactions []string, stdout io.Writer, stderr io.Writer) process.Result {
+	return r.runFileWithVariablesAndEnvironment(ctx, database, path, variables, environment, redactions, stdout, stderr)
+}
+
+func (r Runner) runFileWithVariablesAndEnvironment(ctx context.Context, database string, path string, variables map[string]string, environment map[string]string, redactions []string, stdout io.Writer, stderr io.Writer) process.Result {
 	args := []string{
 		"-S", r.Conn.Server,
 		"-U", r.Conn.User,
@@ -75,7 +84,7 @@ func (r Runner) RunFileWithVariablesAndEnvironment(ctx context.Context, database
 			args = append(args, name+"="+value)
 		}
 	}
-	return r.runWithEnvironment(ctx, environment, redactions, filepath.Dir(path), args...)
+	return r.runWithEnvironment(ctx, environment, redactions, filepath.Dir(path), stdout, stderr, args...)
 }
 
 func (r Runner) RequireSuccess(ctx context.Context, database string, sql string) error {
@@ -96,10 +105,10 @@ func firstNonEmpty(values ...string) string {
 }
 
 func (r Runner) run(ctx context.Context, args ...string) process.Result {
-	return r.runWithEnvironment(ctx, nil, nil, "", args...)
+	return r.runWithEnvironment(ctx, nil, nil, "", nil, nil, args...)
 }
 
-func (r Runner) runWithEnvironment(ctx context.Context, environment map[string]string, extraRedactions []string, workingDirectory string, args ...string) process.Result {
+func (r Runner) runWithEnvironment(ctx context.Context, environment map[string]string, extraRedactions []string, workingDirectory string, stdout io.Writer, stderr io.Writer, args ...string) process.Result {
 	env := []string{"SQLCMDPASSWORD=" + r.Conn.Password}
 	redactions := append([]string{}, r.Redactions...)
 	redactions = append(redactions, extraRedactions...)
@@ -115,9 +124,13 @@ func (r Runner) runWithEnvironment(ctx context.Context, environment map[string]s
 			redactions = append(redactions, value)
 		}
 	}
-	return process.RunOptions(ctx, process.Options{
+	options := process.Options{
 		Redactions:       redactions,
 		Env:              env,
 		WorkingDirectory: workingDirectory,
-	}, r.SQLCmd, args...)
+	}
+	if stdout != nil || stderr != nil {
+		return process.RunStreamingOptions(ctx, stdout, stderr, options, r.SQLCmd, args...)
+	}
+	return process.RunOptions(ctx, options, r.SQLCmd, args...)
 }

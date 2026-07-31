@@ -120,20 +120,10 @@ func runSQLScripts(cmd *cobra.Command, app *appContext, flags *sqlFlags, scripts
 	for _, script := range scripts {
 		infof(cmd.OutOrStdout(), "Running %s", script)
 		ctx, cancel := timeoutContext(commandContext(cmd), app.processTimeout)
-		result := runner.RunFileWithVariablesAndEnvironment(ctx, flags.database, script, variables, secretVariables, secretRedactions)
+		result := runner.RunFileWithVariablesAndEnvironmentStreaming(ctx, flags.database, script, variables, secretVariables, secretRedactions, cmd.OutOrStdout(), cmd.ErrOrStderr())
 		cancel()
 		if err := writeSQLLog(resolveSQLLogDir(app, flags), script, result.Stdout, result.Stderr); err != nil {
 			return err
-		}
-		if result.Stdout != "" {
-			if _, err := fmt.Fprintln(cmd.OutOrStdout(), result.Stdout); err != nil {
-				return err
-			}
-		}
-		if result.Stderr != "" {
-			if _, err := fmt.Fprintln(cmd.ErrOrStderr(), result.Stderr); err != nil {
-				return err
-			}
 		}
 		if result.ExitCode != 0 {
 			return fmt.Errorf("script failed with exit code %d: %s", result.ExitCode, script)

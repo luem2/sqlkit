@@ -10,16 +10,19 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/luem2/sqlkit/internal/config"
 	"github.com/luem2/sqlkit/internal/confirm"
 	"github.com/luem2/sqlkit/internal/ssdt"
 )
 
 type publishFlags struct {
-	env       string
-	company   string
-	dacpac    string
-	profile   string
-	allowProd bool
+	env          string
+	company      string
+	database     string
+	dacpac       string
+	profile      string
+	allowProd    bool
+	skipSecurity bool
 }
 
 func newPublishCommand(app *appContext) *cobra.Command {
@@ -48,35 +51,51 @@ func newPublishBDSistemaCommand(app *appContext) *cobra.Command {
 			if strings.TrimSpace(flags.company) == "" {
 				return fmt.Errorf("--company is required")
 			}
+			normalizedCompany, err := companyCode(flags.company)
+			if err != nil {
+				return err
+			}
 
 			targetDB, err := companyTargetDatabase(flags.company, "_BD_SISTEMA")
 			if err != nil {
 				return err
+			}
+			if strings.TrimSpace(flags.database) != "" {
+				targetDB = strings.TrimSpace(flags.database)
 			}
 			dacpac := resolveRepoPath(app, firstNonEmpty(flags.dacpac, app.cfg.Paths["bd_sistema_dacpac"], "BD_SISTEMA/bin/Debug/BD_SISTEMA.dacpac"))
 			profile := resolvePublishProfile(app, flags.profile, profileKey("bd_sistema", flags.env), defaultBDSistemaProfile(flags.env))
 			logFile := filepath.Join(resolveLogsDir(app, "publish"), fmt.Sprintf("BD_SISTEMA-%s.log", normalizedEnv))
 
 			return runProfilePublish(cmd, app, flags, publishProfileRequest{
-				systemName:  "BD_SISTEMA",
-				targetDB:    targetDB,
-				dacpac:      dacpac,
-				profile:     profile,
-				logFile:     logFile,
-				company:     flags.company,
+				systemName: "BD_SISTEMA",
+				targetDB:   targetDB,
+				dacpac:     dacpac,
+				profile:    profile,
+				logFile:    logFile,
+				company:    normalizedCompany,
+				sqlcmdVariables: map[string]string{
+					"Company": normalizedCompany,
+				},
 				allowDrop:   publishProfileEnv(flags.env) == "test",
 				blockProd:   false,
 				requireAWS:  true,
 				envForLog:   strings.ToUpper(normalizedEnv),
 				description: "BD_SISTEMA",
+				security: publishSecurityRequest{
+					databaseScriptPathKey:  "bd_sistema_security_script",
+					databaseScriptFallback: "_infra/security/bd-sistema.sql",
+				},
 			})
 		},
 	}
 	addPublishEnvFlag(cmd, flags)
 	cmd.Flags().StringVar(&flags.company, "company", "", "company code used to resolve target database")
+	cmd.Flags().StringVar(&flags.database, "database", "", "target database override")
 	cmd.Flags().StringVar(&flags.dacpac, "dacpac", "", "dacpac path")
 	cmd.Flags().StringVar(&flags.profile, "profile", "", "publish profile path")
 	cmd.Flags().BoolVar(&flags.allowProd, "allow-prod", false, "allow execution against prod or prod-legacy")
+	cmd.Flags().BoolVar(&flags.skipSecurity, "skip-security", false, "skip post-publish SQL security scripts")
 	_ = cmd.MarkFlagRequired("company")
 	return cmd
 }
@@ -102,6 +121,10 @@ func newPublishGrupoCentralCommand(app *appContext) *cobra.Command {
 				requireAWS:  true,
 				envForLog:   strings.ToUpper(normalizedEnv),
 				description: "GRUPO_CENTRAL",
+				security: publishSecurityRequest{
+					databaseScriptPathKey:  "grupo_central_security_script",
+					databaseScriptFallback: "_infra/security/grupo-central.sql",
+				},
 			})
 		},
 	}
@@ -109,6 +132,7 @@ func newPublishGrupoCentralCommand(app *appContext) *cobra.Command {
 	cmd.Flags().StringVar(&flags.dacpac, "dacpac", "", "dacpac path")
 	cmd.Flags().StringVar(&flags.profile, "profile", "", "publish profile path")
 	cmd.Flags().BoolVar(&flags.allowProd, "allow-prod", false, "allow execution against prod or prod-legacy")
+	cmd.Flags().BoolVar(&flags.skipSecurity, "skip-security", false, "skip post-publish SQL security scripts")
 	return cmd
 }
 
@@ -148,22 +172,30 @@ func newPublishFacturacionCommand(app *appContext) *cobra.Command {
 	cmd.Flags().StringVar(&flags.dacpac, "dacpac", "", "dacpac path")
 	cmd.Flags().StringVar(&flags.profile, "profile", "", "publish profile path")
 	cmd.Flags().BoolVar(&flags.allowProd, "allow-prod", false, "allow execution against prod or prod-legacy")
+	cmd.Flags().BoolVar(&flags.skipSecurity, "skip-security", false, "skip post-publish SQL security scripts")
 	_ = cmd.MarkFlagRequired("company")
 	return cmd
 }
 
 type publishProfileRequest struct {
-	systemName  string
-	targetDB    string
-	dacpac      string
-	profile     string
-	logFile     string
-	company     string
-	allowDrop   bool
-	blockProd   bool
-	requireAWS  bool
-	envForLog   string
-	description string
+	systemName      string
+	targetDB        string
+	dacpac          string
+	profile         string
+	logFile         string
+	company         string
+	allowDrop       bool
+	blockProd       bool
+	requireAWS      bool
+	envForLog       string
+	description     string
+	security        publishSecurityRequest
+	sqlcmdVariables map[string]string
+}
+
+type publishSecurityRequest struct {
+	databaseScriptPathKey  string
+	databaseScriptFallback string
 }
 
 func runProfilePublish(cmd *cobra.Command, app *appContext, flags *publishFlags, req publishProfileRequest) error {
@@ -175,8 +207,11 @@ func runProfilePublish(cmd *cobra.Command, app *appContext, flags *publishFlags,
 	if err != nil {
 		return err
 	}
+	if err := validatePostPublishSecurity(app, flags, req); err != nil {
+		return err
+	}
 
-	args := ssdt.PublishProfileArgs(req.profile, req.dacpac, conn, req.targetDB, req.allowDrop)
+	args := ssdt.PublishProfileArgs(req.profile, req.dacpac, conn, req.targetDB, req.allowDrop, req.sqlcmdVariables)
 	if req.requireAWS && isAWSServer(conn.Server) {
 		warnf(cmd.OutOrStdout(), "AWS target detected (%s).", conn.Server)
 		if err := requireInteractive(app, "interactive AWS confirmation"); err != nil {
@@ -196,7 +231,99 @@ func runProfilePublish(cmd *cobra.Command, app *appContext, flags *publishFlags,
 		return sqlPackageError("publish", result.ExitCode, firstNonEmpty(result.Stderr, result.Stdout))
 	}
 	successf(cmd.OutOrStdout(), "Publish OK: %s", req.targetDB)
+	if err := runPostPublishSecurity(cmd, app, flags, req); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validatePostPublishSecurity(app *appContext, flags *publishFlags, req publishProfileRequest) error {
+	if flags.skipSecurity || !req.security.enabled() {
+		return nil
+	}
+	for _, secretName := range publishSecuritySecretNames() {
+		key, ok := app.cfg.Secrets[secretName]
+		if !ok || strings.TrimSpace(key) == "" {
+			return fmt.Errorf("keyring secret %q is not configured; run sqlkit config secret set %s", secretName, secretName)
+		}
+		if _, err := config.Secret(key); err != nil {
+			return fmt.Errorf("load keyring secret %q: %w", secretName, err)
+		}
+	}
+	for _, script := range []string{
+		publishSecurityLoginsScript(app),
+		publishSecurityDatabaseScript(app, req.security),
+	} {
+		if _, err := os.Stat(script); err != nil {
+			return fmt.Errorf("security script not found %q: %w", script, err)
+		}
+	}
+	return nil
+}
+
+func runPostPublishSecurity(cmd *cobra.Command, app *appContext, flags *publishFlags, req publishProfileRequest) error {
+	if flags.skipSecurity {
+		warnf(cmd.OutOrStdout(), "Skipping post-publish security.")
+		return nil
+	}
+	if !req.security.enabled() {
+		return nil
+	}
+
+	infof(cmd.OutOrStdout(), "Applying SQL security for %s.", req.targetDB)
+	loginScript := publishSecurityLoginsScript(app)
+	databaseScript := publishSecurityDatabaseScript(app, req.security)
+
+	loginFlags := &sqlFlags{
+		env:        flags.env,
+		database:   "master",
+		allowProd:  flags.allowProd,
+		secretVars: publishSecuritySecretVars(),
+	}
+	if err := runSQLScripts(cmd, app, loginFlags, []string{loginScript}); err != nil {
+		return fmt.Errorf("apply login security: %w", err)
+	}
+
+	databaseFlags := &sqlFlags{
+		env:       flags.env,
+		database:  req.targetDB,
+		allowProd: flags.allowProd,
+	}
+	if err := runSQLScripts(cmd, app, databaseFlags, []string{databaseScript}); err != nil {
+		return fmt.Errorf("apply database security: %w", err)
+	}
+	successf(cmd.OutOrStdout(), "Security OK: %s", req.targetDB)
+	return nil
+}
+
+func (r publishSecurityRequest) enabled() bool {
+	return strings.TrimSpace(r.databaseScriptPathKey) != "" || strings.TrimSpace(r.databaseScriptFallback) != ""
+}
+
+func publishSecurityLoginsScript(app *appContext) string {
+	return resolveRepoPath(app, firstNonEmpty(app.cfg.Paths["security_logins_script"], "_infra/logins/apply.sql"))
+}
+
+func publishSecurityDatabaseScript(app *appContext, security publishSecurityRequest) string {
+	return resolveRepoPath(app, firstNonEmpty(app.cfg.Paths[security.databaseScriptPathKey], security.databaseScriptFallback))
+}
+
+func publishSecuritySecretVars() []string {
+	return []string{
+		"DbaPassword=dba-login-password",
+		"StkPassword=stk-login-password",
+		"ErpPassword=erp-login-password",
+		"TesterPassword=tester-login-password",
+	}
+}
+
+func publishSecuritySecretNames() []string {
+	return []string{
+		"dba-login-password",
+		"stk-login-password",
+		"erp-login-password",
+		"tester-login-password",
+	}
 }
 
 func addPublishEnvFlag(cmd *cobra.Command, flags *publishFlags) {
@@ -241,12 +368,20 @@ func defaultFacturacionProfile(envName string) string {
 }
 
 func companyTargetDatabase(company string, suffix string) (string, error) {
+	normalized, err := companyCode(company)
+	if err != nil {
+		return "", err
+	}
+	return normalized + suffix, nil
+}
+
+func companyCode(company string) (string, error) {
 	normalized := strings.TrimSpace(company)
 	if normalized == "" {
 		return "", fmt.Errorf("--company is required")
 	}
 	firstLetter := []rune(normalized)[0]
-	return strings.ToUpper(string(firstLetter)) + suffix, nil
+	return strings.ToUpper(string(firstLetter)), nil
 }
 
 func resolvePublishProfile(app *appContext, explicit string, configKey string, fallback string) string {

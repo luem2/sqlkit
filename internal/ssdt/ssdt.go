@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/luem2/sqlkit/internal/config"
@@ -91,7 +92,7 @@ func BacpacImportArgs(conn *config.SQLConnection, database string, bacpac string
 	}
 }
 
-func PublishProfileArgs(profile string, dacpac string, conn *config.SQLConnection, targetDatabase string, allowDrop bool) []string {
+func PublishProfileArgs(profile string, dacpac string, conn *config.SQLConnection, targetDatabase string, allowDrop bool, variables map[string]string) []string {
 	server := SQLPackageServerName(conn.Server)
 	args := []string{
 		"/Action:" + string(ActionPublish),
@@ -121,6 +122,9 @@ func PublishProfileArgs(profile string, dacpac string, conn *config.SQLConnectio
 		"/v:SqlUser="+conn.User,
 		"/v:SqlPassword="+conn.Password,
 	)
+	for _, name := range sortedVariableNames(variables) {
+		args = append(args, "/v:"+name+"="+variables[name])
+	}
 
 	return args
 }
@@ -164,6 +168,17 @@ func packageTrustServerCertificate(conn *config.SQLConnection) string {
 		return "True"
 	}
 	return packageBool(conn.TrustServerCertificate)
+}
+
+func sortedVariableNames(values map[string]string) []string {
+	names := make([]string, 0, len(values))
+	for name := range values {
+		if strings.TrimSpace(name) != "" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 func packageBool(value bool) string {

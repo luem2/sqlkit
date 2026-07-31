@@ -11,6 +11,7 @@ func newDBCommand(app *appContext) *cobra.Command {
 	cmd.AddCommand(newDBBuildCommand(app))
 	cmd.AddCommand(newDBLoadCommand(app))
 	cmd.AddCommand(newDBScriptCommand(app))
+	cmd.AddCommand(newDBDataScriptCommand(app))
 	cmd.AddCommand(newDBBackupCommand(app))
 	cmd.AddCommand(newDBExistsCommand(app))
 	cmd.AddCommand(newDBSessionsCommand(app))

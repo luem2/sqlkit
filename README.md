@@ -410,6 +410,54 @@ Flags:
 - `--dacpac`: dacpac explícito.
 - `--output`, `-o`: script de publish.
 
+### Seed data versionable
+
+```bash
+sqlkit db data-script \
+  --repo C:\Users\luche\workspace\sql \
+  --manifest BD_SISTEMA/postdeploy/data-seeds.manifest.toml \
+  --group clf-parametros-vigentes
+
+sqlkit db data-script \
+  --repo C:\Users\luche\workspace\sql \
+  --manifest BD_SISTEMA/postdeploy/data-seeds.manifest.toml \
+  --group catalogos-ba \
+  --table ba.Autorizacion_Tipo \
+  --output artifacts/seeds/ba-autorizacion-tipo.sql
+```
+
+Genera un script SQL idempotente desde un grupo declarado en el manifiesto del
+repo SQL. La salida por defecto es la configurada en el grupo (`output`) y puede
+sobrescribirse con `--output`.
+
+Con `--table` se genera un subconjunto del grupo. En ese caso `--output` es
+obligatorio para no sobrescribir accidentalmente el script completo del grupo.
+Si la tabla depende de una tabla padre filtrada por el manifiesto, hay que
+incluir tambien la padre o generar el grupo completo.
+
+Flags:
+
+- `--manifest`: manifiesto de seeds; por defecto
+  `BD_SISTEMA/postdeploy/data-seeds.manifest.toml`.
+- `--group`: grupo a generar.
+- `--table`: tabla del grupo a generar; repetible y requiere `--output`.
+- `--env`: entorno fuente; por defecto `defaults.source_env` del manifiesto.
+- `--output`, `-o`: destino alternativo para el script generado.
+- `--allow-prod`: requerido si `--env` es `prod` o `prod-legacy`.
+
+El manifiesto puede declarar `column_lookups` para no copiar IDs fragiles desde
+la base fuente. Ejemplo: resolver una FK a una empresa por codigo en la base
+destino:
+
+```toml
+[[groups.tables.column_lookups]]
+column = "id_empresa"
+lookup_table = "dbo.Empresa"
+lookup_column = "id"
+match_column = "codigo"
+match_value = "$(Company)"
+```
+
 ### BACPAC
 
 ```bash
@@ -428,16 +476,105 @@ Flags:
 
 ```bash
 sqlkit publish bd-sistema --env local --company A
+sqlkit publish bd-sistema --env local --company P --database P_BD_SISTEMA_PUBLISH_TEST --skip-security
 sqlkit publish grupo-central --env local
 sqlkit publish facturacion --env local --company P
 ```
 
+En `bd-sistema`, `--company` resuelve la base por defecto y tambien pasa
+`Company=<codigo>` como variable SQLCMD al postdeploy. Si usas `--database`
+para publicar en una base alternativa, el seed de empresa sigue saliendo de
+`--company`.
+
+`bd-sistema` y `grupo-central` aplican seguridad SQL despues del publish:
+primero `_infra/logins/apply.sql` en `master` y luego el script de seguridad de
+base correspondiente. Usar `--skip-security` solamente para casos especiales.
+Las rutas pueden configurarse con `paths.security_logins_script`,
+`paths.bd_sistema_security_script` y `paths.grupo_central_security_script`.
+
 Flags:
 
 - `--company`: código de empresa cuando aplica.
+- `--database`: base destino alternativa para `bd-sistema`.
 - `--dacpac`: dacpac explícito.
 - `--profile`: publish profile explícito.
+- `--skip-security`: omite los scripts SQL de seguridad posteriores al publish.
 - `--allow-prod`: requerido contra producción.
+
+### Bootstrap BD_SISTEMA
+
+```bash
+sqlkit bootstrap bd-sistema \
+  --env local \
+  --company P \
+  --database P_BD_SISTEMA_NUEVA \
+  --sensitive-source-database P_BD_SISTEMA
+
+sqlkit bootstrap bd-sistema \
+  --env local \
+  --company P \
+  --database P_BD_SISTEMA_NUEVA \
+  --skip-sensitive
+```
+
+Este flujo es para una BD nueva funcional: sucursales, centros de costo,
+usuarios, parametros vigentes, productos/tasas y datos por empresa. No se
+ejecuta en el publish diario.
+
+Por defecto `sqlkit` usa el runner dividido:
+
+1. `BD_SISTEMA/bootstrap/bootstrap-core.sql`
+2. genera y ejecuta `BD_SISTEMA/bootstrap-sensitive/generated/company/<empresa>.sql`
+3. `BD_SISTEMA/bootstrap/bootstrap-after-users.sql`
+
+Los scripts sensibles se generan desde una BD viva, no se versionan y pueden
+contener `auth.Usuario`, hashes, salts, emails y relaciones de usuario.
+
+Usar `--skip-sensitive` solo para casos especiales donde los usuarios ya fueron
+provisionados previamente en la base destino. En ese modo se ejecuta
+`BD_SISTEMA/bootstrap/bootstrap.sql`.
+
+Flags:
+
+- `--company`: empresa que selecciona seeds A/C/P.
+- `--database`: base destino.
+- `--script`: runner bootstrap alternativo; requiere `--skip-sensitive`.
+- `--skip-sensitive`: no genera ni ejecuta bootstrap sensible.
+- `--sensitive-source-env`: entorno fuente para datos sensibles; por defecto
+  usa `--env`.
+- `--sensitive-source-database`: base fuente alternativa para datos sensibles.
+- `--seed-manifest`: manifiesto de seeds; por defecto
+  `BD_SISTEMA/postdeploy/data-seeds.manifest.toml`.
+- `--allow-prod`: requerido contra producción.
+
+### Migracion BD_SISTEMA
+
+```bash
+sqlkit migrate bd-sistema list
+
+sqlkit migrate bd-sistema run \
+  --env local \
+  --company P \
+  --database P_BD_SISTEMA_NUEVA \
+  --step proveedores
+
+sqlkit migrate bd-sistema run \
+  --env local \
+  --company P \
+  --database P_BD_SISTEMA_NUEVA \
+  --from clientes \
+  --to cuotas
+
+sqlkit migrate bd-sistema run \
+  --env local \
+  --company P \
+  --database P_BD_SISTEMA_NUEVA \
+  --all
+```
+
+Lee `BD_SISTEMA/migration/bd-sistema.toml` y ejecuta los pasos declarados en
+orden. `--company-id` permite pasar `id_empresa` legacy si todavia no esta
+declarado en el manifiesto.
 
 ### Scripts SQL con sqlcmd
 

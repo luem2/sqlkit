@@ -526,7 +526,7 @@ func prepareOperationalBackupDirectory(cmd *cobra.Command, app *appContext, poli
 		}
 		return nil
 	}
-	return os.MkdirAll(serverDir, 0o750)
+	return os.MkdirAll(serverDir, 0750)
 }
 
 func prepareBackupDirectory(cmd *cobra.Command, app *appContext, container string, serverFile string) error {
@@ -538,7 +538,7 @@ func prepareBackupDirectory(cmd *cobra.Command, app *appContext, container strin
 		}
 		return nil
 	}
-	return os.MkdirAll(serverDir, 0o750)
+	return os.MkdirAll(serverDir, 0750)
 }
 
 func collectServerBackup(cmd *cobra.Command, app *appContext, policy *backups.Policy, serverFile string, localFile string) error {
@@ -665,7 +665,7 @@ func copyFile(source string, target string) error {
 	if err := backups.EnsureParent(target); err != nil {
 		return err
 	}
-	output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o640)
+	output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0640)
 	if err != nil {
 		return err
 	}

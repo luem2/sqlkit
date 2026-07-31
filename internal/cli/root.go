@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/luem2/sqlkit/internal/config"
-	"github.com/luem2/sqlkit/internal/sqlserver"
 )
 
 type appContext struct {
@@ -79,8 +78,9 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newSQLCommand(app))
 	root.AddCommand(newLintCommand())
 	root.AddCommand(newLocksCommand(app))
-	root.AddCommand(newNvimCommand(app))
 	root.AddCommand(newPublishCommand(app))
+	root.AddCommand(newBootstrapCommand(app))
+	root.AddCommand(newMigrateCommand(app))
 
 	return root
 }
@@ -164,34 +164,4 @@ func defaultString(value string, fallback string) string {
 		return fallback
 	}
 	return value
-}
-
-func newNvimCommand(app *appContext) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "nvim",
-		Short: "Neovim integration helpers",
-	}
-
-	cmd.AddCommand(newNvimDadbodURLCommand(app))
-
-	return cmd
-}
-
-func newNvimDadbodURLCommand(app *appContext) *cobra.Command {
-	flags := &dbFlags{}
-	cmd := &cobra.Command{
-		Use:   "dadbod-url",
-		Short: "Print a Dadbod SQL Server URL from sqlkit config",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, err := loadConnection(app, flags.env)
-			if err != nil {
-				return err
-			}
-
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), sqlserver.DadbodURL(conn, flags.database))
-			return err
-		},
-	}
-	addEnvDatabaseFlags(cmd, flags)
-	return cmd
 }

@@ -23,6 +23,11 @@ type ResultSet struct {
 	Rows    [][]string
 }
 
+type RawResultSet struct {
+	Columns []string
+	Rows    [][]interface{}
+}
+
 func OpenClient(ctx context.Context, conn *config.SQLConnection, database string) (*Client, error) {
 	db, err := sql.Open("sqlserver", connectionString(conn, database))
 	if err != nil {
@@ -72,6 +77,32 @@ func (c *Client) Query(ctx context.Context, statement Statement) ([]ResultSet, e
 	return resultSets, nil
 }
 
+func (c *Client) QueryRaw(ctx context.Context, statement Statement) ([]RawResultSet, error) {
+	rows, err := c.db.QueryContext(ctx, statement.Text, statement.sqlArgs()...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var resultSets []RawResultSet
+	for {
+		resultSet, err := scanCurrentRawResultSet(rows)
+		if err != nil {
+			return nil, err
+		}
+		if len(resultSet.Columns) > 0 {
+			resultSets = append(resultSets, resultSet)
+		}
+		if !rows.NextResultSet() {
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return resultSets, nil
+}
+
 func scanCurrentResultSet(rows *sql.Rows) (ResultSet, error) {
 	columns, err := rows.Columns()
 	if err != nil {
@@ -99,6 +130,31 @@ func scanCurrentResultSet(rows *sql.Rows) (ResultSet, error) {
 	return resultSet, nil
 }
 
+func scanCurrentRawResultSet(rows *sql.Rows) (RawResultSet, error) {
+	columns, err := rows.Columns()
+	if err != nil {
+		return RawResultSet{}, err
+	}
+
+	resultSet := RawResultSet{Columns: columns}
+	for rows.Next() {
+		rawValues := make([]interface{}, len(columns))
+		scanValues := make([]interface{}, len(columns))
+		for index := range rawValues {
+			scanValues[index] = &rawValues[index]
+		}
+		if err := rows.Scan(scanValues...); err != nil {
+			return RawResultSet{}, err
+		}
+
+		row := make([]interface{}, len(columns))
+		copy(row, rawValues)
+		resultSet.Rows = append(resultSet.Rows, row)
+	}
+
+	return resultSet, nil
+}
+
 func formatSQLValue(value interface{}) string {
 	switch typed := value.(type) {
 	case nil:
@@ -115,28 +171,6 @@ func formatSQLValue(value interface{}) string {
 }
 
 func connectionString(conn *config.SQLConnection, database string) string {
-	dsn := connectionURL(conn)
-
-	query := dsn.Query()
-	query.Set("database", database)
-	setTLSQuery(conn, query)
-	dsn.RawQuery = query.Encode()
-
-	return dsn.String()
-}
-
-func DadbodURL(conn *config.SQLConnection, database string) string {
-	dsn := connectionURL(conn)
-
-	query := dsn.Query()
-	query.Set("database", database)
-	setTLSQuery(conn, query)
-	dsn.RawQuery = query.Encode()
-
-	return dsn.String()
-}
-
-func connectionURL(conn *config.SQLConnection) url.URL {
 	dsn := url.URL{
 		Scheme: "sqlserver",
 		User:   url.UserPassword(conn.User, conn.Password),
@@ -148,10 +182,8 @@ func connectionURL(conn *config.SQLConnection) url.URL {
 		dsn.Path = "/" + instance
 	}
 
-	return dsn
-}
-
-func setTLSQuery(conn *config.SQLConnection, query url.Values) {
+	query := dsn.Query()
+	query.Set("database", database)
 	encrypt := conn.Encrypt
 	trustServerCertificate := conn.TrustServerCertificate
 	if strings.TrimSpace(encrypt) == "" {
@@ -160,6 +192,9 @@ func setTLSQuery(conn *config.SQLConnection, query url.Values) {
 	}
 	query.Set("encrypt", encrypt)
 	query.Set("TrustServerCertificate", strconv.FormatBool(trustServerCertificate))
+	dsn.RawQuery = query.Encode()
+
+	return dsn.String()
 }
 
 func sqlServerURLHost(server string) string {

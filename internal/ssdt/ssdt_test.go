@@ -69,7 +69,9 @@ func TestBacpacArgs(t *testing.T) {
 func TestPublishProfileArgs(t *testing.T) {
 	conn := &config.SQLConnection{Server: "localhost", User: "sa", Password: "secret"}
 	server := SQLPackageServerName(conn.Server)
-	args := PublishProfileArgs("profile.xml", "db.dacpac", conn, "A_BD_SISTEMA", true)
+	args := PublishProfileArgs("profile.xml", "db.dacpac", conn, "A_BD_SISTEMA", true, map[string]string{
+		"Company": "A",
+	})
 
 	mustContainArg(t, args, "/Action:Publish")
 	mustContainArg(t, args, "/Profile:profile.xml")
@@ -82,6 +84,7 @@ func TestPublishProfileArgs(t *testing.T) {
 	mustContainArg(t, args, "/p:DropObjectsNotInSource=True")
 	mustContainArg(t, args, "/v:SqlServer="+server)
 	mustContainArg(t, args, "/v:TargetDb=A_BD_SISTEMA")
+	mustContainArg(t, args, "/v:Company=A")
 	mustContainArg(t, args, "/v:SqlPassword=secret")
 }
 
