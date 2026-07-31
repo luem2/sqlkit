@@ -81,6 +81,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newPublishCommand(app))
 	root.AddCommand(newBootstrapCommand(app))
 	root.AddCommand(newMigrateCommand(app))
+	root.AddCommand(newTUICommand(app))
 
 	return root
 }

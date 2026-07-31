@@ -442,6 +442,8 @@ Flags:
 - `--group`: grupo a generar.
 - `--table`: tabla del grupo a generar; repetible y requiere `--output`.
 - `--env`: entorno fuente; por defecto `defaults.source_env` del manifiesto.
+- `--source-database`: base fuente alternativa para ese run, sin modificar el
+  manifiesto.
 - `--output`, `-o`: destino alternativo para el script generado.
 - `--allow-prod`: requerido si `--env` es `prod` o `prod-legacy`.
 
@@ -546,6 +548,36 @@ Flags:
 - `--seed-manifest`: manifiesto de seeds; por defecto
   `BD_SISTEMA/postdeploy/data-seeds.manifest.toml`.
 - `--allow-prod`: requerido contra producción.
+
+### TUI
+
+```bash
+sqlkit tui
+sqlkit ui
+```
+
+Abre un menu interactivo para los flujos operativos mas usados. La TUI esta
+organizada por categorias:
+
+- `BD_SISTEMA`: publish diario, bootstrap, generar seeds, aplicar domicilios,
+  validar bootstrap y ejecutar pasos legacy-a-nuevo.
+- `Bases`: publish de `GRUPO_CENTRAL`/`FACTURACION`, build/script SSDT,
+  sesiones, drop, rename, size y recovery.
+- `Scripts y datos`: ejecutar SQL suelto o directorios, diagnosticar locks,
+  consultar FKs, nulls y limpiar caracteres.
+- `Backups y cargas`: backup manual, load de `.bak/.bacpac/.dacpac`, export
+  bacpac y comandos de policy.
+- `Credenciales`: resumen seguro de config/keyring, `config init`,
+  `config set-repo`, alta/actualizacion de entornos, alta/consulta explicita de
+  secretos y `env check`.
+- `Diagnostico`: `doctor`, `deps check`, entornos y config path.
+
+La TUI muestra el comando equivalente antes de ejecutarlo. Si el entorno es
+`prod` o `prod-legacy`, pide confirmacion y agrega `--allow-prod`.
+Las acciones que escriben passwords usan input enmascarado y guardan el valor
+directamente en el keyring, sin pasarlo por flags ni imprimirlo. El resumen de
+credenciales muestra `server`, `user`, `password_key` y si la clave existe en
+keyring; no muestra valores secretos.
 
 ### Migracion BD_SISTEMA
 

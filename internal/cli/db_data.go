@@ -15,6 +15,7 @@ type dbDataScriptFlags struct {
 	group     string
 	tables    []string
 	output    string
+	sourceDB  string
 	allowProd bool
 }
 
@@ -32,6 +33,7 @@ func newDBDataScriptCommand(app *appContext) *cobra.Command {
 	cmd.Flags().StringVar(&flags.group, "group", "", "manifest group to generate")
 	cmd.Flags().StringArrayVar(&flags.tables, "table", nil, "table from the group to generate; repeatable and requires --output")
 	cmd.Flags().StringVarP(&flags.output, "output", "o", "", "override output path")
+	cmd.Flags().StringVar(&flags.sourceDB, "source-database", "", "source database override")
 	cmd.Flags().BoolVar(&flags.allowProd, "allow-prod", false, "allow generation from prod or prod-legacy")
 	_ = cmd.MarkFlagRequired("group")
 	return cmd
@@ -55,6 +57,9 @@ func runDBDataScript(cmd *cobra.Command, app *appContext, flags *dbDataScriptFla
 	}
 	if strings.TrimSpace(flags.output) != "" {
 		group.Output = flags.output
+	}
+	if strings.TrimSpace(flags.sourceDB) != "" {
+		group.SourceDatabase = strings.TrimSpace(flags.sourceDB)
 	}
 
 	env := firstNonEmpty(flags.env, manifest.Defaults.SourceEnv)
