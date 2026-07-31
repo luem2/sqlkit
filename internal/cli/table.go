@@ -29,6 +29,7 @@ func printTable(writer io.Writer, rows [][]string) {
 		return
 	}
 	widths := tableWidths(rows)
+
 	for index, row := range rows {
 		printTableRow(writer, row, widths)
 		if index == 0 {
