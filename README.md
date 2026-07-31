@@ -579,6 +579,11 @@ directamente en el keyring, sin pasarlo por flags ni imprimirlo. El resumen de
 credenciales muestra `server`, `user`, `password_key` y si la clave existe en
 keyring; no muestra valores secretos.
 
+Si la TUI se abre desde el repo de `sqlkit` y no desde el repo SQL, valida que
+el repo activo contenga `BD_SISTEMA/BD_SISTEMA.sqlproj`. Si no lo encuentra,
+propone rutas candidatas como `..\sql` y permite guardar la elegida como
+`defaults.repo`.
+
 ### Migracion BD_SISTEMA
 
 ```bash

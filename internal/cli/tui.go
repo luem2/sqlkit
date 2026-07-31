@@ -50,6 +50,9 @@ func newTUICommand(app *appContext) *cobra.Command {
 }
 
 func runTUI(cmd *cobra.Command, app *appContext) error {
+	if err := tuiEnsureSQLRepo(cmd, app); err != nil {
+		return err
+	}
 	tuiTitle("sqlkit ui", "Repo: "+app.cfg.Root)
 	for {
 		menu, err := tuiSelect("Menu", []string{
@@ -94,6 +97,92 @@ func runTUI(cmd *cobra.Command, app *appContext) error {
 			return nil
 		}
 	}
+}
+
+func tuiEnsureSQLRepo(cmd *cobra.Command, app *appContext) error {
+	if tuiLooksLikeSQLRepo(app.cfg.Root) {
+		return nil
+	}
+
+	pterm.Warning.Printfln("El repo activo no parece el repo SQL: %s", app.cfg.Root)
+	candidates := tuiSQLRepoCandidates(app.cfg.Root)
+	options := append([]string{}, candidates...)
+	options = append(options, "Elegir manualmente", "Continuar igual")
+
+	selected, err := tuiSelect("Repo SQL", options, firstString(options))
+	if err != nil {
+		return err
+	}
+	if selected == "Continuar igual" {
+		return nil
+	}
+
+	repo := selected
+	if selected == "Elegir manualmente" {
+		repo, err = tuiInput("Ruta repo SQL", filepath.Clean(filepath.Join(filepath.Dir(app.cfg.Root), "sql")))
+		if err != nil {
+			return err
+		}
+	}
+	repo = strings.TrimSpace(repo)
+	if repo == "" {
+		return fmt.Errorf("repo is required")
+	}
+	resolvedRepo, err := filepath.Abs(repo)
+	if err != nil {
+		return err
+	}
+	if !tuiLooksLikeSQLRepo(resolvedRepo) {
+		return fmt.Errorf("%s no parece el repo SQL; falta BD_SISTEMA/BD_SISTEMA.sqlproj", resolvedRepo)
+	}
+
+	app.cfg.Root = resolvedRepo
+	if save, err := tuiConfirm("Guardar como repo por defecto", true); err != nil {
+		return err
+	} else if save {
+		path, err := config.WriteUserDefaultRepo(resolvedRepo)
+		if err != nil {
+			return err
+		}
+		app.cfg.Defaults["repo"] = resolvedRepo
+		infof(cmd.OutOrStdout(), "Config: %s", path)
+	}
+	return nil
+}
+
+func tuiLooksLikeSQLRepo(repo string) bool {
+	if strings.TrimSpace(repo) == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(repo, "BD_SISTEMA", "BD_SISTEMA.sqlproj"))
+	return err == nil
+}
+
+func tuiSQLRepoCandidates(current string) []string {
+	seen := make(map[string]bool)
+	var candidates []string
+	add := func(value string) {
+		if strings.TrimSpace(value) == "" {
+			return
+		}
+		resolved, err := filepath.Abs(value)
+		if err != nil {
+			return
+		}
+		if seen[strings.ToLower(resolved)] || !tuiLooksLikeSQLRepo(resolved) {
+			return
+		}
+		seen[strings.ToLower(resolved)] = true
+		candidates = append(candidates, resolved)
+	}
+
+	add(filepath.Join(current, "..", "sql"))
+	add(filepath.Join(filepath.Dir(current), "sql"))
+	add(filepath.Join(current, ".."))
+	if home, err := os.UserHomeDir(); err == nil {
+		add(filepath.Join(home, "workspace", "sql"))
+	}
+	return candidates
 }
 
 func tuiBDSistemaMenu(cmd *cobra.Command, app *appContext) error {
@@ -1488,7 +1577,7 @@ func tuiAllowProd(env string) (bool, error) {
 func tuiConfirmAndRun(cmd *cobra.Command, app *appContext, commands [][]string) error {
 	fmt.Fprintln(cmd.OutOrStdout())
 	for _, args := range commands {
-		infof(cmd.OutOrStdout(), "Comando: %s", shellCommandLine(args))
+		infof(cmd.OutOrStdout(), "Comando: %s", shellCommandLine(tuiCommandArgsWithRepo(app, args)))
 	}
 	ok, err := tuiConfirm("Ejecutar", true)
 	if err != nil {
@@ -1503,13 +1592,17 @@ func tuiConfirmAndRun(cmd *cobra.Command, app *appContext, commands [][]string) 
 		return err
 	}
 	for _, args := range commands {
-		fullArgs := append([]string{"--repo", app.cfg.Root}, args...)
+		fullArgs := tuiCommandArgsWithRepo(app, args)
 		result := newProcessService(cmd, app).RunStreaming(executable, fullArgs...)
 		if result.ExitCode != 0 {
 			return fmt.Errorf("command failed with exit code %d: %s", result.ExitCode, shellCommandLine(args))
 		}
 	}
 	return nil
+}
+
+func tuiCommandArgsWithRepo(app *appContext, args []string) []string {
+	return append([]string{"--repo", app.cfg.Root}, args...)
 }
 
 func tuiSecretName(app *appContext) (string, error) {
