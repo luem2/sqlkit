@@ -197,6 +197,10 @@ func connectionString(conn *config.SQLConnection, database string) string {
 	return dsn.String()
 }
 
+func DadbodURL(conn *config.SQLConnection, database string) string {
+	return connectionString(conn, database)
+}
+
 func sqlServerURLHost(server string) string {
 	server = strings.TrimSpace(server)
 	server = strings.TrimPrefix(server, "tcp:")

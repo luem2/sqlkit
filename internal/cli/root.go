@@ -82,6 +82,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newSQLCommand(app))
 	root.AddCommand(newLintCommand())
 	root.AddCommand(newLocksCommand(app))
+	root.AddCommand(newNvimCommand(app))
 	root.AddCommand(newPublishCommand(app))
 	root.AddCommand(newBootstrapCommand(app))
 	root.AddCommand(newMigrateCommand(app))

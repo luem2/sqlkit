@@ -45,3 +45,16 @@ func TestConnectionStringUsesConfiguredTLSOptions(t *testing.T) {
 	mustContain(t, got, "encrypt=true")
 	mustContain(t, got, "TrustServerCertificate=false")
 }
+
+func TestDadbodURLUsesSQLServerConnectionURL(t *testing.T) {
+	got := DadbodURL(&config.SQLConnection{
+		Server:   "localhost,1433",
+		User:     "tester",
+		Password: "p@w",
+	}, "GRUPO_CENTRAL")
+
+	mustContain(t, got, "sqlserver://tester:p%40w@localhost:1433?")
+	mustContain(t, got, "database=GRUPO_CENTRAL")
+	mustContain(t, got, "encrypt=disable")
+	mustContain(t, got, "TrustServerCertificate=true")
+}
