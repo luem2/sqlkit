@@ -19,6 +19,8 @@ type dbDataScriptFlags struct {
 	allowProd bool
 }
 
+const defaultBDSistemaSeedManifest = "BD_SISTEMA/seeds/data-seeds.manifest.toml"
+
 func newDBDataScriptCommand(app *appContext) *cobra.Command {
 	flags := &dbDataScriptFlags{}
 	cmd := &cobra.Command{
@@ -29,7 +31,7 @@ func newDBDataScriptCommand(app *appContext) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&flags.env, "env", "", "source environment; defaults to manifest defaults.source_env")
-	cmd.Flags().StringVar(&flags.manifest, "manifest", "BD_SISTEMA/postdeploy/data-seeds.manifest.toml", "seed manifest path")
+	cmd.Flags().StringVar(&flags.manifest, "manifest", defaultBDSistemaSeedManifest, "seed manifest path")
 	cmd.Flags().StringVar(&flags.group, "group", "", "manifest group to generate")
 	cmd.Flags().StringArrayVar(&flags.tables, "table", nil, "table from the group to generate; repeatable and requires --output")
 	cmd.Flags().StringVarP(&flags.output, "output", "o", "", "override output path")
@@ -39,8 +41,19 @@ func newDBDataScriptCommand(app *appContext) *cobra.Command {
 	return cmd
 }
 
+func bdSistemaSeedManifestPath(app *appContext) string {
+	if app != nil && app.cfg != nil {
+		return firstNonEmpty(app.cfg.Paths["bd_sistema_seed_manifest"], defaultBDSistemaSeedManifest)
+	}
+	return defaultBDSistemaSeedManifest
+}
+
 func runDBDataScript(cmd *cobra.Command, app *appContext, flags *dbDataScriptFlags) error {
-	manifest, err := dataseed.LoadManifest(app.cfg.Root, flags.manifest)
+	manifestPath := flags.manifest
+	if !cmd.Flags().Changed("manifest") {
+		manifestPath = bdSistemaSeedManifestPath(app)
+	}
+	manifest, err := dataseed.LoadManifest(app.cfg.Root, manifestPath)
 	if err != nil {
 		return err
 	}

@@ -423,12 +423,12 @@ Flags:
 ```bash
 sqlkit db data-script \
   --repo C:\Users\luche\workspace\sql \
-  --manifest BD_SISTEMA/postdeploy/data-seeds.manifest.toml \
+  --manifest BD_SISTEMA/seeds/data-seeds.manifest.toml \
   --group clf-parametros-vigentes
 
 sqlkit db data-script \
   --repo C:\Users\luche\workspace\sql \
-  --manifest BD_SISTEMA/postdeploy/data-seeds.manifest.toml \
+  --manifest BD_SISTEMA/seeds/data-seeds.manifest.toml \
   --group catalogos-ba \
   --table ba.Autorizacion_Tipo \
   --output artifacts/seeds/ba-autorizacion-tipo.sql
@@ -446,7 +446,7 @@ incluir tambien la padre o generar el grupo completo.
 Flags:
 
 - `--manifest`: manifiesto de seeds; por defecto
-  `BD_SISTEMA/postdeploy/data-seeds.manifest.toml`.
+  `BD_SISTEMA/seeds/data-seeds.manifest.toml`.
 - `--group`: grupo a generar.
 - `--table`: tabla del grupo a generar; repetible y requiere `--output`.
 - `--env`: entorno fuente; por defecto `defaults.source_env` del manifiesto.
@@ -554,7 +554,7 @@ Flags:
   usa `--env`.
 - `--sensitive-source-database`: base fuente alternativa para datos sensibles.
 - `--seed-manifest`: manifiesto de seeds; por defecto
-  `BD_SISTEMA/postdeploy/data-seeds.manifest.toml`.
+  `BD_SISTEMA/seeds/data-seeds.manifest.toml`.
 - `--allow-prod`: requerido contra producción.
 
 ### TUI

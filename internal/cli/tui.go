@@ -904,7 +904,7 @@ func tuiBootstrapBDSistema(cmd *cobra.Command, app *appContext) error {
 }
 
 func tuiGenerateSeed(cmd *cobra.Command, app *appContext) error {
-	manifestPath := "BD_SISTEMA/postdeploy/data-seeds.manifest.toml"
+	manifestPath := bdSistemaSeedManifestPath(app)
 	manifest, err := dataseed.LoadManifest(app.cfg.Root, manifestPath)
 	if err != nil {
 		return err

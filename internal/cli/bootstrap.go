@@ -91,7 +91,7 @@ func newBootstrapBDSistemaCommand(app *appContext) *cobra.Command {
 	cmd.Flags().StringVar(&flags.company, "company", "", "company code")
 	cmd.Flags().StringVar(&flags.database, "database", "", "target database override")
 	cmd.Flags().StringVar(&flags.script, "script", "", "bootstrap runner script path")
-	cmd.Flags().StringVar(&flags.seedManifest, "seed-manifest", "BD_SISTEMA/postdeploy/data-seeds.manifest.toml", "seed manifest path")
+	cmd.Flags().StringVar(&flags.seedManifest, "seed-manifest", defaultBDSistemaSeedManifest, "seed manifest path")
 	cmd.Flags().BoolVar(&flags.skipSensitive, "skip-sensitive", false, "do not generate/apply bootstrap-sensitive data; users must already exist if referenced by bootstrap data")
 	cmd.Flags().StringVar(&flags.sensitiveSourceEnv, "sensitive-source-env", "", "source environment for sensitive bootstrap; defaults to --env")
 	cmd.Flags().StringVar(&flags.sensitiveSourceDatabase, "sensitive-source-database", "", "source database override for sensitive bootstrap")
@@ -102,7 +102,11 @@ func newBootstrapBDSistemaCommand(app *appContext) *cobra.Command {
 }
 
 func generateSensitiveBootstrapScript(cmd *cobra.Command, app *appContext, flags *bootstrapFlags, company string) (string, error) {
-	manifest, err := dataseed.LoadManifest(app.cfg.Root, flags.seedManifest)
+	manifestPath := flags.seedManifest
+	if !cmd.Flags().Changed("seed-manifest") {
+		manifestPath = bdSistemaSeedManifestPath(app)
+	}
+	manifest, err := dataseed.LoadManifest(app.cfg.Root, manifestPath)
 	if err != nil {
 		return "", err
 	}

@@ -153,6 +153,7 @@ func DefaultUserConfig() *Config {
 	cfg.Paths["bd_sistema_bootstrap_script"] = "BD_SISTEMA/bootstrap/bootstrap.sql"
 	cfg.Paths["bd_sistema_bootstrap_core_script"] = "BD_SISTEMA/bootstrap/bootstrap-core.sql"
 	cfg.Paths["bd_sistema_bootstrap_after_users_script"] = "BD_SISTEMA/bootstrap/bootstrap-after-users.sql"
+	cfg.Paths["bd_sistema_seed_manifest"] = "BD_SISTEMA/seeds/data-seeds.manifest.toml"
 	cfg.Paths["bd_sistema_migration_manifest"] = "BD_SISTEMA/migration/bd-sistema.toml"
 	cfg.Paths["artifacts"] = "artifacts"
 	cfg.Paths["docs"] = "docs"
